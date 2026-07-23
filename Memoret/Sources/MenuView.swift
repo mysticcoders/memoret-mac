@@ -90,6 +90,10 @@ struct MenuView: View {
 
             Divider()
 
+            Toggle("Show Dock icon", isOn: $model.showDockIcon)
+                .toggleStyle(.checkbox)
+                .font(.caption)
+
             HStack {
                 Text("Fingerprint \(model.fingerprint)")
                     .font(.caption2)

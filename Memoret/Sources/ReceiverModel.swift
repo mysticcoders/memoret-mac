@@ -23,6 +23,15 @@ final class ReceiverModel: ObservableObject {
     @Published var statusDetail = "Starting…"
     @Published var vaultPath = ""
     @Published var recentCaptures: [RecentCapture] = []
+    @Published var showDockIcon: Bool = UserDefaults.standard.object(forKey: "showDockIcon") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(showDockIcon, forKey: "showDockIcon")
+            NSApp.setActivationPolicy(showDockIcon ? .regular : .accessory)
+            if showDockIcon {
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
+    }
 
     private var config: ReceiverConfig!
     private var keypair: Keypair!

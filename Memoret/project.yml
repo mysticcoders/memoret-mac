@@ -13,7 +13,10 @@ targets:
     type: application
     platform: macOS
     deploymentTarget: "14.0"
-    sources: [Sources]
+    sources:
+      - Sources
+      - path: Memoret.icns
+        buildPhase: resources
     dependencies:
       - package: Sodium
       - package: ZIPFoundation
@@ -23,6 +26,7 @@ targets:
         CFBundleDisplayName: Memoret
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleIconFile: Memoret
         LSUIElement: true
         NSHumanReadableCopyright: © 2026 Mystic Coders
     settings:
