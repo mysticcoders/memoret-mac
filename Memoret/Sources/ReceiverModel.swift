@@ -45,7 +45,7 @@ final class ReceiverModel: ObservableObject {
     private var config: ReceiverConfig!
     private var keypair: Keypair!
     private var ingested = Set<String>()
-    private var server: LanServer?
+    private var servers: [LanServer] = []
     private var started = false
 
     private let log = Logger(subsystem: "com.mysticcoders.memoret.mac", category: "receiver")
@@ -202,7 +202,31 @@ final class ReceiverModel: ObservableObject {
             }
         }
         server.start()
-        self.server = server
+        servers.append(server)
+        startLegacyServer(fingerprint: fingerprint, authToken: authToken, version: version)
+    }
+
+    /**
+     Binds a compatibility listener speaking the pre-rename VoiceVault
+     dialect (_obsidianvoice._tcp, ping service "voicevault") so app builds
+     that predate the Memoret rename can still discover and deliver here.
+     */
+    private func startLegacyServer(fingerprint: String, authToken: String, version: String) {
+        let legacy = LanServer(
+            port: ReceiverModel.lanPort + 1,
+            serviceName: "Memoret Legacy (\(ProcessInfo.processInfo.hostName))",
+            serviceType: "_obsidianvoice._tcp",
+            pingBody: ["service": "voicevault", "version": version, "fingerprint": fingerprint],
+            authToken: authToken
+        )
+        legacy.onCapture = { [weak self] blob in
+            Task { @MainActor in self?.acceptBlob(blob) }
+        }
+        legacy.onEvent = { [weak self] text in
+            Task { @MainActor in self?.record("\(text) (legacy)") }
+        }
+        legacy.start()
+        servers.append(legacy)
     }
 
     /**

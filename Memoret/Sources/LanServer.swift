@@ -22,16 +22,25 @@ final class LanServer {
 
     private let port: UInt16
     private let serviceName: String
+    private let serviceType: String
     private let pingBody: [String: String]
     private let authToken: String
-    private let queue = DispatchQueue(label: "memoret.lan")
+    private let queue: DispatchQueue
     private var listener: NWListener?
 
-    init(port: UInt16, serviceName: String, pingBody: [String: String], authToken: String) {
+    init(
+        port: UInt16,
+        serviceName: String,
+        serviceType: String = "_memoret._tcp",
+        pingBody: [String: String],
+        authToken: String
+    ) {
         self.port = port
         self.serviceName = serviceName
+        self.serviceType = serviceType
         self.pingBody = pingBody
         self.authToken = authToken
+        self.queue = DispatchQueue(label: "memoret.lan.\(port)")
     }
 
     /**
@@ -41,7 +50,7 @@ final class LanServer {
     func start() {
         do {
             let listener = try NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: port)!)
-            listener.service = NWListener.Service(name: serviceName, type: "_memoret._tcp")
+            listener.service = NWListener.Service(name: serviceName, type: serviceType)
             listener.stateUpdateHandler = { [weak self] state in
                 switch state {
                 case .ready:
@@ -94,6 +103,12 @@ final class LanServer {
                             return self.respond(connection, status: 413, body: ["error": "body too large"])
                         }
                         expectedTotal = range.upperBound + request.contentLength
+                        if (request.headers["expect"] ?? "").lowercased().contains("100-continue") {
+                            connection.send(
+                                content: Data("HTTP/1.1 100 Continue\r\n\r\n".utf8),
+                                completion: .contentProcessed { _ in }
+                            )
+                        }
                     } else if buffer.count > LanServer.maxHeaderBytes {
                         return self.respond(connection, status: 431, body: ["error": "headers too large"])
                     }
