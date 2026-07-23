@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import SwiftUI
 
 struct ReceiverConfig: Codable {
@@ -15,6 +16,12 @@ struct RecentCapture: Identifiable {
     let receivedAt: Date
 }
 
+struct ActivityEvent: Identifiable {
+    let id = UUID()
+    let date: Date
+    let text: String
+}
+
 @MainActor
 final class ReceiverModel: ObservableObject {
     static let lanPort: UInt16 = 41832
@@ -23,6 +30,8 @@ final class ReceiverModel: ObservableObject {
     @Published var statusDetail = "Starting…"
     @Published var vaultPath = ""
     @Published var recentCaptures: [RecentCapture] = []
+    @Published var events: [ActivityEvent] = []
+    @Published var lastPing: Date?
     @Published var showDockIcon: Bool = UserDefaults.standard.object(forKey: "showDockIcon") as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(showDockIcon, forKey: "showDockIcon")
@@ -38,6 +47,8 @@ final class ReceiverModel: ObservableObject {
     private var ingested = Set<String>()
     private var server: LanServer?
     private var started = false
+
+    private let log = Logger(subsystem: "com.mysticcoders.memoret.mac", category: "receiver")
 
     private let appSupport = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -175,6 +186,9 @@ final class ReceiverModel: ObservableObject {
         server.onCapture = { [weak self] blob in
             Task { @MainActor in self?.acceptBlob(blob) }
         }
+        server.onEvent = { [weak self] text in
+            Task { @MainActor in self?.record(text) }
+        }
         server.onStateChange = { [weak self] state in
             Task { @MainActor in
                 switch state {
@@ -189,6 +203,22 @@ final class ReceiverModel: ObservableObject {
         }
         server.start()
         self.server = server
+    }
+
+    /**
+     Appends a timestamped entry to the activity feed and mirrors it to the
+     unified log (subsystem com.mysticcoders.memoret.mac) for Console.app
+     and `log stream` debugging.
+     */
+    private func record(_ text: String) {
+        log.info("\(text, privacy: .public)")
+        if text.hasPrefix("Ping") {
+            lastPing = Date()
+        }
+        events.insert(ActivityEvent(date: Date(), text: text), at: 0)
+        if events.count > 50 {
+            events.removeLast()
+        }
     }
 
     /**
@@ -226,7 +256,9 @@ final class ReceiverModel: ObservableObject {
         do {
             let blob = try Data(contentsOf: file)
             let result = try Ingest.sealedBlob(blob, keypair: keypair, vaultRoot: vaultRoot, alreadyIngested: ingested)
-            if !result.duplicate {
+            if result.duplicate {
+                record("Duplicate capture \(result.captureId.prefix(8)) ignored")
+            } else {
                 ingested.insert(result.captureId)
                 config.ingested = Array(ingested)
                 try? saveConfig()
@@ -235,9 +267,11 @@ final class ReceiverModel: ObservableObject {
                     at: 0
                 )
                 if recentCaptures.count > 10 { recentCaptures.removeLast() }
+                record("Saved \(result.notePath ?? "capture")")
             }
             try FileManager.default.removeItem(at: file)
         } catch {
+            record("Quarantined a bad capture: \(error.localizedDescription)")
             statusDetail = "Quarantined a bad capture: \(error.localizedDescription)"
             try? FileManager.default.createDirectory(at: failedDir, withIntermediateDirectories: true)
             try? FileManager.default.moveItem(

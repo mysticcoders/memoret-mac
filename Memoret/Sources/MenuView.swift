@@ -90,6 +90,44 @@ struct MenuView: View {
 
             Divider()
 
+            HStack {
+                Text("Activity")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let ping = model.lastPing {
+                    Text("Last ping \(ping, style: .time)")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                } else {
+                    Text("No pings yet")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if model.events.isEmpty {
+                Text("Waiting for connections — pings and deliveries will appear here.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            } else {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(model.events.prefix(6)) { event in
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(event.date, style: .time)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .monospacedDigit()
+                            Text(event.text)
+                                .font(.caption2)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+                }
+            }
+
+            Divider()
+
             Toggle("Show Dock icon", isOn: $model.showDockIcon)
                 .toggleStyle(.checkbox)
                 .font(.caption)

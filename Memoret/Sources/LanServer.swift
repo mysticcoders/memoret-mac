@@ -18,6 +18,7 @@ final class LanServer {
 
     var onCapture: ((Data) -> Void)?
     var onStateChange: ((LanServerState) -> Void)?
+    var onEvent: ((String) -> Void)?
 
     private let port: UInt16
     private let serviceName: String
@@ -118,22 +119,38 @@ final class LanServer {
      bearer auth and the VVSB magic prefix on deliveries.
      */
     private func route(_ connection: NWConnection, request: HTTPRequest, body: Data) {
+        let peer = remoteHost(of: connection)
         if request.method == "GET" && request.path == "/ping" {
+            onEvent?("Ping from \(peer)")
             return respond(connection, status: 200, body: pingBody)
         }
         if request.method == "POST" && request.path == "/capture" {
             let presented = (request.headers["authorization"] ?? "").replacingOccurrences(of: "Bearer ", with: "")
             guard MemoretCrypto.timingSafeEqual(presented, authToken) else {
+                onEvent?("Rejected capture from \(peer): bad token")
                 return respond(connection, status: 401, body: ["error": "unauthorized"])
             }
             let magic = MemoretCrypto.sealedMagic
             guard body.count >= magic.count, [UInt8](body.prefix(magic.count)) == magic else {
+                onEvent?("Rejected capture from \(peer): not a sealed blob")
                 return respond(connection, status: 400, body: ["error": "not a VVSB sealed blob"])
             }
+            onEvent?("Capture from \(peer) (\(body.count / 1024) KB)")
             onCapture?(body)
             return respond(connection, status: 202, body: ["stored": "accepted"])
         }
+        onEvent?("\(request.method) \(request.path) from \(peer): not found")
         respond(connection, status: 404, body: ["error": "not found"])
+    }
+
+    /**
+     Extracts the remote peer's host address from an inbound connection.
+     */
+    private func remoteHost(of connection: NWConnection) -> String {
+        if case let .hostPort(host, _) = connection.endpoint {
+            return "\(host)".replacingOccurrences(of: "%en0", with: "")
+        }
+        return "unknown"
     }
 
     /**
