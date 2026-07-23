@@ -1,0 +1,42 @@
+name: MemoretMac
+options:
+  bundleIdPrefix: com.mysticcoders
+packages:
+  Sodium:
+    url: https://github.com/jedisct1/swift-sodium.git
+    from: 0.9.1
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation.git
+    from: 0.9.19
+targets:
+  Memoret:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources: [Sources]
+    dependencies:
+      - package: Sodium
+      - package: ZIPFoundation
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Memoret
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: true
+        NSHumanReadableCopyright: © 2026 Mystic Coders
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mysticcoders.memoret.mac
+        DEVELOPMENT_TEAM: REMBT6JY4N
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: false
+schemes:
+  Memoret:
+    build:
+      targets:
+        Memoret: all
+    run:
+      config: Debug
