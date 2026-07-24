@@ -81,8 +81,13 @@ log "Built Memoret.app version $VERSION"
 
 log "Verifying app signature + hardened runtime"
 codesign --verify --deep --strict --verbose=2 "$APP"
-codesign -dvv "$APP" 2>&1 | grep -q "flags=.*runtime" \
-  || die "Hardened runtime not enabled on the exported app"
+# Captured first rather than piped into grep -q: under pipefail, grep exiting
+# on its first match kills codesign with SIGPIPE and fails the pipeline.
+SIGN_INFO="$(codesign -dvv "$APP" 2>&1)"
+case "$SIGN_INFO" in
+  *flags=*runtime*) ;;
+  *) die "Hardened runtime not enabled on the exported app" ;;
+esac
 
 # --- Notarize + staple the app --------------------------------------------
 if [ "$SKIP_NOTARIZE" != "1" ]; then
