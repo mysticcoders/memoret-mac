@@ -99,6 +99,9 @@ final class LanServer {
                         guard let request = HTTPRequest(headerData: buffer[..<range.lowerBound]) else {
                             return self.respond(connection, status: 400, body: ["error": "malformed request"])
                         }
+                        if request.contentLength < 0 {
+                            return self.respond(connection, status: 400, body: ["error": "invalid content-length"])
+                        }
                         if request.contentLength > LanServer.maxBodyBytes {
                             return self.respond(connection, status: 413, body: ["error": "body too large"])
                         }
@@ -113,7 +116,7 @@ final class LanServer {
                         return self.respond(connection, status: 431, body: ["error": "headers too large"])
                     }
                 }
-                if let start = headerEnd, let total = expectedTotal, buffer.count >= total {
+                if let start = headerEnd, let total = expectedTotal, total >= start, buffer.count >= total {
                     guard let request = HTTPRequest(headerData: buffer[..<(start - 4)]) else {
                         return self.respond(connection, status: 400, body: ["error": "malformed request"])
                     }

@@ -3,11 +3,13 @@ import ZIPFoundation
 
 enum PackageError: LocalizedError {
     case missingEntry(String)
+    case entryTooLarge(String)
     case unreadable
 
     var errorDescription: String? {
         switch self {
         case .missingEntry(let name): return "package: missing entry \(name)"
+        case .entryTooLarge(let name): return "package: entry \(name) exceeds size limit"
         case .unreadable: return "package: not a readable zip archive"
         }
     }
@@ -17,6 +19,15 @@ struct CapturePackage {
     static let audioEntry = "audio.m4a"
     static let transcriptEntry = "transcript.md"
     static let manifestEntry = "manifest.json"
+
+    /// Per-entry uncompressed size ceilings. The 64 MB body cap bounds only
+    /// the sealed (compressed) blob; without these, a decrypted entry could
+    /// inflate to gigabytes and exhaust memory (a zip bomb).
+    static let maxEntryBytes: [String: Int] = [
+        manifestEntry: 1 * 1024 * 1024,
+        transcriptEntry: 10 * 1024 * 1024,
+        audioEntry: 128 * 1024 * 1024,
+    ]
 
     let manifest: Manifest
     let transcript: String
@@ -53,8 +64,17 @@ struct CapturePackage {
         guard let entry = archive[name] else {
             throw PackageError.missingEntry(name)
         }
+        let limit = maxEntryBytes[name] ?? 0
+        if Int(clamping: entry.uncompressedSize) > limit {
+            throw PackageError.entryTooLarge(name)
+        }
         var data = Data()
-        _ = try archive.extract(entry, consumer: { data.append($0) })
+        _ = try archive.extract(entry, consumer: { chunk in
+            data.append(chunk)
+            if data.count > limit {
+                throw PackageError.entryTooLarge(name)
+            }
+        })
         return data
     }
 }
