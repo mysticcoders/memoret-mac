@@ -162,11 +162,47 @@ final class ReceiverModel: ObservableObject {
      */
     private func saveConfig() throws {
         let data = try JSONEncoder().encode(config)
-        try data.write(to: configURL)
-        try FileManager.default.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: configURL.path
+        try ReceiverModel.writePrivate(data, to: configURL)
+    }
+
+    /**
+     Writes key material so it is never observable at looser than 0600: the
+     temporary file is created with that mode by open() itself, independent
+     of the process umask, then renamed atomically over the destination.
+     */
+    private static func writePrivate(_ data: Data, to url: URL) throws {
+        let temp = url.deletingLastPathComponent().appendingPathComponent(
+            "\(url.lastPathComponent).\(ProcessInfo.processInfo.processIdentifier).tmp"
         )
+        let descriptor = temp.withUnsafeFileSystemRepresentation { path -> Int32 in
+            guard let path else { return -1 }
+            return open(path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+        }
+        guard descriptor >= 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        do {
+            let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: false)
+            try handle.write(contentsOf: data)
+            fsync(descriptor)
+            try handle.close()
+        } catch {
+            close(descriptor)
+            try? FileManager.default.removeItem(at: temp)
+            throw error
+        }
+        let renamed = temp.withUnsafeFileSystemRepresentation { from -> Int32 in
+            guard let from else { return -1 }
+            return url.withUnsafeFileSystemRepresentation { to -> Int32 in
+                guard let to else { return -1 }
+                return rename(from, to)
+            }
+        }
+        guard renamed == 0 else {
+            let code = POSIXErrorCode(rawValue: errno) ?? .EIO
+            try? FileManager.default.removeItem(at: temp)
+            throw POSIXError(code)
+        }
     }
 
     /**
