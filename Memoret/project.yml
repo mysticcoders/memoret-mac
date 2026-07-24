@@ -37,6 +37,8 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.9"
         GENERATE_INFOPLIST_FILE: false
+        ENABLE_HARDENED_RUNTIME: true
+        PRODUCT_NAME: Memoret
 schemes:
   Memoret:
     build:
