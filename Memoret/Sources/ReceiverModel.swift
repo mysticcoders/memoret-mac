@@ -216,7 +216,17 @@ final class ReceiverModel: ObservableObject {
         let server = LanServer(
             port: ReceiverModel.lanPort,
             serviceName: "Memoret Mac (\(ProcessInfo.processInfo.hostName))",
-            pingBody: ["service": "memoret", "version": version, "fingerprint": fingerprint],
+            pingBody: [
+                "service": "memoret",
+                "version": version,
+                "fingerprint": fingerprint,
+                // Comma-separated rather than a JSON array on purpose:
+                // shipped senders decode /ping as a flat string map, and an
+                // array value makes that decode throw, which would look like
+                // the receiver had vanished. Senders that do not know the
+                // field read this receiver as voice-only.
+                "capabilities": CaptureKind.allCases.map(\.rawValue).joined(separator: ","),
+            ],
             authToken: authToken
         )
         server.onCapture = { [weak self] blob in

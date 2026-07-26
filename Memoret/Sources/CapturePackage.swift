@@ -3,12 +3,15 @@ import ZIPFoundation
 
 enum PackageError: LocalizedError {
     case missingEntry(String)
+    case unexpectedEntry(String)
     case entryTooLarge(String)
     case unreadable
 
     var errorDescription: String? {
         switch self {
         case .missingEntry(let name): return "package: missing entry \(name)"
+        case .unexpectedEntry(let name):
+            return "package: entry \(name) is not allowed on this capture kind"
         case .entryTooLarge(let name): return "package: entry \(name) exceeds size limit"
         case .unreadable: return "package: not a readable zip archive"
         }
@@ -31,12 +34,14 @@ struct CapturePackage {
 
     let manifest: Manifest
     let transcript: String
-    let audio: Data
+    /// Present for voice captures, absent for link captures.
+    let audio: Data?
 
     /**
-     Parses and validates a plaintext zip package (manifest.json +
-     transcript.md + audio.m4a), throwing if an entry is missing or the
-     manifest is invalid. Mirrors the contract's parsePackage.
+     Parses and validates a plaintext zip package, throwing if a required
+     entry is missing or the manifest is invalid. Which entries are required
+     follows the manifest kind: audio belongs to voice captures only.
+     Mirrors the contract's parsePackage.
      */
     static func parse(_ zipBytes: Data) throws -> CapturePackage {
         let archive: Archive
@@ -47,9 +52,19 @@ struct CapturePackage {
         }
         let manifestData = try extract(archive, entry: manifestEntry)
         let transcriptData = try extract(archive, entry: transcriptEntry)
-        let audioData = try extract(archive, entry: audioEntry)
         let manifest = try JSONDecoder().decode(Manifest.self, from: manifestData)
         try manifest.validate()
+
+        let hasAudio = archive[audioEntry] != nil
+        switch (manifest.captureKind, hasAudio) {
+        case (.voice, false):
+            throw PackageError.missingEntry(audioEntry)
+        case (.link, true):
+            throw PackageError.unexpectedEntry(audioEntry)
+        default:
+            break
+        }
+        let audioData = hasAudio ? try extract(archive, entry: audioEntry) : nil
         return CapturePackage(
             manifest: manifest,
             transcript: String(decoding: transcriptData, as: UTF8.self),

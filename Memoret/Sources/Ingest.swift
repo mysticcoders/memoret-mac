@@ -30,11 +30,22 @@ enum Ingest {
         }
         let fm = FileManager.default
         let notePath = resolveDestination(manifest.vault_note_path, captureId: manifest.capture_id, root: vaultRoot)
-        let audioPath = resolveDestination(manifest.attachment_path, captureId: manifest.capture_id, root: vaultRoot)
-        for relative in Set([parentDir(notePath), parentDir(audioPath)]) where !relative.isEmpty {
-            try fm.createDirectory(at: vaultRoot.appendingPathComponent(relative), withIntermediateDirectories: true)
+        // A link capture has no recording, so there is no attachment to place
+        // and no attachments directory worth creating.
+        var audioPath: String?
+        if let audio = pkg.audio, let attachment = manifest.attachment_path {
+            audioPath = resolveDestination(attachment, captureId: manifest.capture_id, root: vaultRoot)
+            var directories = Set([parentDir(notePath)])
+            if let audioPath { directories.insert(parentDir(audioPath)) }
+            for relative in directories where !relative.isEmpty {
+                try fm.createDirectory(at: vaultRoot.appendingPathComponent(relative), withIntermediateDirectories: true)
+            }
+            try audio.write(to: vaultRoot.appendingPathComponent(audioPath!))
+        } else if !parentDir(notePath).isEmpty {
+            try fm.createDirectory(
+                at: vaultRoot.appendingPathComponent(parentDir(notePath)),
+                withIntermediateDirectories: true)
         }
-        try pkg.audio.write(to: vaultRoot.appendingPathComponent(audioPath))
         try Data(pkg.transcript.utf8).write(to: vaultRoot.appendingPathComponent(notePath))
         return IngestResult(
             captureId: manifest.capture_id,
