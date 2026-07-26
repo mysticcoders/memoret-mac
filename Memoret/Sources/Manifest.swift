@@ -10,6 +10,15 @@ enum ManifestError: LocalizedError {
     }
 }
 
+/**
+ What a capture carries. "voice" is a recording with audio; "link" is a URL
+ shared from elsewhere and has no audio of its own.
+ */
+enum CaptureKind: String, Codable, CaseIterable {
+    case voice
+    case link
+}
+
 struct Manifest: Codable {
     static let currentVersion = 1
 
@@ -18,10 +27,21 @@ struct Manifest: Codable {
     let created_at: String
     let device_id: String
     let vault_note_path: String
-    let attachment_path: String
     let tags: [String]
-    let duration_seconds: Double
-    let transcript_model: String
+
+    /// Absent means voice, so captures written before this field existed
+    /// stay valid. That is also why the version stays at 1: bumping it
+    /// would make this receiver reject voice captures it handles fine.
+    let kind: CaptureKind?
+    /// Present for voice captures, absent for link captures.
+    let attachment_path: String?
+    /// Present for voice captures, absent for link captures.
+    let duration_seconds: Double?
+    /// Present for voice captures, absent for link captures.
+    let transcript_model: String?
+
+    /// The kind this manifest declares, treating absence as voice.
+    var captureKind: CaptureKind { kind ?? .voice }
 
     /**
      Rejects vault-relative paths that could escape the vault or collide
@@ -55,17 +75,34 @@ struct Manifest: Codable {
         guard Manifest.isSafeVaultPath(vault_note_path) else {
             throw ManifestError.invalid("vault_note_path is not a safe vault-relative path")
         }
-        guard Manifest.isSafeVaultPath(attachment_path) else {
-            throw ManifestError.invalid("attachment_path is not a safe vault-relative path")
-        }
         guard tags.allSatisfy({ !$0.isEmpty }) else {
             throw ManifestError.invalid("tags must be an array of non-empty strings")
         }
-        guard duration_seconds.isFinite, duration_seconds >= 0 else {
-            throw ManifestError.invalid("duration_seconds must be a non-negative number")
-        }
-        guard !transcript_model.isEmpty else {
-            throw ManifestError.invalid("transcript_model must be a non-empty string")
+
+        // The audio-bearing fields travel together: a voice capture carries
+        // all of them, a link capture none. A half-populated manifest would
+        // leave ingest guessing whether to expect an audio entry.
+        switch captureKind {
+        case .voice:
+            guard let attachment_path, Manifest.isSafeVaultPath(attachment_path) else {
+                throw ManifestError.invalid("attachment_path is not a safe vault-relative path")
+            }
+            guard let duration_seconds, duration_seconds.isFinite, duration_seconds >= 0 else {
+                throw ManifestError.invalid("duration_seconds must be a non-negative number")
+            }
+            guard let transcript_model, !transcript_model.isEmpty else {
+                throw ManifestError.invalid("transcript_model must be a non-empty string")
+            }
+        case .link:
+            guard attachment_path == nil else {
+                throw ManifestError.invalid("attachment_path is not allowed on a link capture")
+            }
+            guard duration_seconds == nil else {
+                throw ManifestError.invalid("duration_seconds is not allowed on a link capture")
+            }
+            guard transcript_model == nil else {
+                throw ManifestError.invalid("transcript_model is not allowed on a link capture")
+            }
         }
     }
 
