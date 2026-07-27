@@ -39,10 +39,34 @@ targets:
         GENERATE_INFOPLIST_FILE: false
         ENABLE_HARDENED_RUNTIME: true
         PRODUCT_NAME: Memoret
+  # The ingest core carried the same collision and embed faults found in the
+  # other two receivers, and nothing here could have caught them.
+  MemoretTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources: [Tests]
+    dependencies:
+      - target: Memoret
+      # Named again rather than relied on transitively: the tests build the
+      # packages and sealed blobs they feed to ingest.
+      - package: Sodium
+      - package: ZIPFoundation
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mysticcoders.memoret.mac.tests
+        DEVELOPMENT_TEAM: REMBT6JY4N
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: true
 schemes:
   Memoret:
     build:
       targets:
         Memoret: all
+        MemoretTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - MemoretTests
