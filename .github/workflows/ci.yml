@@ -1,0 +1,50 @@
+name: CI
+
+# This repository had no workflow at all, so nothing checked a pull request
+# or a push. The ingest core carried faults that a single test run catches.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: Memoret
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the newest Xcode
+        working-directory: .
+        run: |
+          latest=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Using $latest"
+          sudo xcode-select -s "$latest"
+          xcodebuild -version
+
+      # The project file is generated and gitignored, so a new source file
+      # only reaches the build after this step.
+      - name: Install XcodeGen
+        working-directory: .
+        run: brew install xcodegen
+
+      - name: Generate the project
+        run: xcodegen generate
+
+      # Signing is irrelevant to a test run and would need the Developer ID
+      # certificate the release build uses.
+      - name: Test
+        run: |
+          xcodebuild test \
+            -project MemoretMac.xcodeproj \
+            -scheme Memoret \
+            -destination 'platform=macOS' \
+            -derivedDataPath build-ci \
+            CODE_SIGNING_ALLOWED=NO

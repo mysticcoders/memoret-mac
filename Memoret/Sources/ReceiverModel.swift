@@ -329,9 +329,25 @@ final class ReceiverModel: ObservableObject {
             if result.duplicate {
                 record("Duplicate capture \(result.captureId.prefix(8)) ignored")
             } else {
+                // Recorded only once the files are down; the other order
+                // would lose a capture outright if the write then failed.
+                // This used to be `try?`, so a config that would not save
+                // left the capture written, the blob deleted, and the id
+                // remembered only until the next launch — after which a
+                // redelivery wrote a second copy. Now it unwinds: the files
+                // are taken back and the blob is quarantined for a retry.
                 ingested.insert(result.captureId)
                 config.ingested = Array(ingested)
-                try? saveConfig()
+                do {
+                    try saveConfig()
+                } catch {
+                    ingested.remove(result.captureId)
+                    Ingest.discard(
+                        [result.notePath, result.audioPath]
+                            .compactMap { $0 }
+                            .map { vaultRoot.appendingPathComponent($0) })
+                    throw error
+                }
                 recentCaptures.insert(
                     RecentCapture(notePath: result.notePath ?? "", receivedAt: Date()),
                     at: 0
