@@ -52,7 +52,7 @@ struct CapturePackage {
         }
         let manifestData = try extract(archive, entry: manifestEntry)
         let transcriptData = try extract(archive, entry: transcriptEntry)
-        let manifest = try JSONDecoder().decode(Manifest.self, from: manifestData)
+        let manifest = try Manifest.decode(from: manifestData)
         try manifest.validate()
 
         let hasAudio = archive[audioEntry] != nil
