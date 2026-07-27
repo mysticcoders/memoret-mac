@@ -38,6 +38,13 @@ jobs:
       - name: Generate the project
         run: xcodegen generate
 
+      # The corpus is shared with the other receivers and pinned to a tag,
+      # so a new expectation lands when this repository adopts it rather
+      # than the next time CI happens to run.
+      - name: Fetch the conformance corpus
+        working-directory: .
+        run: scripts/fetch-fixtures.sh
+
       # Signing is irrelevant to a test run and would need the Developer ID
       # certificate the release build uses.
       - name: Test

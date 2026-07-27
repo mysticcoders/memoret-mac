@@ -55,6 +55,43 @@ struct Manifest: Codable {
     }
 
     /**
+     Decodes a manifest, reporting which field was wrong.
+
+     Codable's own failure is "The data couldn't be read because it isn't
+     in the correct format", which names nothing — so a manifest with a
+     numeric tag or an unknown kind was rejected correctly and
+     unhelpfully. The decoding error already carries the coding path, so
+     the field is recovered from it and reported the way every other
+     violation is.
+     */
+    static func decode(from data: Data) throws -> Manifest {
+        do {
+            return try JSONDecoder().decode(Manifest.self, from: data)
+        } catch let error as DecodingError {
+            throw ManifestError.invalid(describe(error))
+        }
+    }
+
+    private static func describe(_ error: DecodingError) -> String {
+        let path: [CodingKey]
+        switch error {
+        case .typeMismatch(_, let context),
+            .valueNotFound(_, let context),
+            .keyNotFound(_, let context),
+            .dataCorrupted(let context):
+            path = context.codingPath
+        @unknown default:
+            path = []
+        }
+        // Index components of the path carry no name, so the nearest named
+        // key is the field worth reporting.
+        guard let field = path.last(where: { $0.intValue == nil })?.stringValue else {
+            return "could not be read"
+        }
+        return "\(field) is missing or not the expected type"
+    }
+
+    /**
      Validates the decoded manifest against the same rules as the TS and
      Python receivers, throwing a descriptive error on the first violation.
      */
@@ -66,8 +103,8 @@ struct Manifest: Codable {
         guard capture_id.range(of: uuidV4, options: [.regularExpression, .caseInsensitive]) != nil else {
             throw ManifestError.invalid("capture_id must be a UUID v4")
         }
-        guard !created_at.isEmpty, parseISODate(created_at) != nil else {
-            throw ManifestError.invalid("created_at must be an ISO-8601 timestamp")
+        guard isRFC3339(created_at) else {
+            throw ManifestError.invalid("created_at must be an RFC 3339 timestamp")
         }
         guard !device_id.isEmpty else {
             throw ManifestError.invalid("device_id must be a non-empty string")
@@ -107,13 +144,33 @@ struct Manifest: Codable {
     }
 
     /**
-     Parses an ISO-8601 timestamp with or without fractional seconds.
+     Whether a timestamp is RFC 3339: a date, a time, and an offset.
+
+     ISO8601DateFormatter alone is not enough. It rolls February 30th
+     forward into March rather than refusing it, so this receiver accepted
+     a day that does not exist — found by the shared corpus at
+     github.com/mysticcoders/memoret-contract-fixtures. The calendar is
+     asked to validate the components instead, and it is a UTC calendar
+     used purely for arithmetic: the offset can legitimately put a capture
+     on a different UTC day than the one it names, so nothing is converted.
      */
-    private func parseISODate(_ s: String) -> Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = fractional.date(from: s) { return d }
-        let plain = ISO8601DateFormatter()
-        return plain.date(from: s)
+    private func isRFC3339(_ s: String) -> Bool {
+        let pattern = #"^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$"#
+        guard s.range(of: pattern, options: .regularExpression) != nil else { return false }
+        guard let year = Int(s.prefix(4)),
+              let month = Int(s.dropFirst(5).prefix(2)),
+              let day = Int(s.dropFirst(8).prefix(2)),
+              let hour = Int(s.dropFirst(11).prefix(2)),
+              let minute = Int(s.dropFirst(14).prefix(2)),
+              let second = Int(s.dropFirst(17).prefix(2))
+        else { return false }
+        guard hour < 24, minute < 60, second < 60 else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        return components.isValidDate(in: calendar)
     }
 }
