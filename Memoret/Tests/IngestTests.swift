@@ -1,5 +1,4 @@
 import Foundation
-import Sodium
 import XCTest
 import ZIPFoundation
 
@@ -182,10 +181,8 @@ final class IngestTests: XCTestCase {
         try addEntry(archive, "audio.m4a", Data([0x00, 0x01, 0x02]))
         let zip = try XCTUnwrap(archive.data)
 
-        let sodium = Sodium()
-        let sealed = try XCTUnwrap(
-            sodium.box.seal(message: [UInt8](zip), recipientPublicKey: keypair.publicKey))
-        return Data(MemoretCrypto.sealedMagic + sealed)
+        return Data(
+            try MemoretCrypto.seal([UInt8](zip), recipientPublicKey: keypair.publicKey))
     }
 
     private func addEntry(_ archive: Archive, _ name: String, _ data: Data) throws {

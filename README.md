@@ -2,7 +2,7 @@
 
 The menu-bar **receiver** for [Memoret](https://memoret.app). Memoret records and transcribes voice notes on iPhone and Apple Watch, seals each one to your receiver's public key, and delivers it over your local network. This app is one such receiver: it holds the private key, listens on the LAN, decrypts arriving captures, and writes them into a folder you choose.
 
-The private key never leaves this machine. Captures are sealed with libsodium `crypto_box_seal` (X25519 + XSalsa20-Poly1305) on the phone and can only be opened here.
+The private key never leaves this machine. Captures are sealed on the phone with HPKE (RFC 9180, `DHKEM(X25519, HKDF-SHA256) / HKDF-SHA256 / ChaCha20-Poly1305`) and can only be opened here.
 
 ## Install
 

@@ -2,9 +2,6 @@ name: MemoretMac
 options:
   bundleIdPrefix: com.mysticcoders
 packages:
-  Sodium:
-    url: https://github.com/jedisct1/swift-sodium.git
-    from: 0.9.1
   ZIPFoundation:
     url: https://github.com/weichsel/ZIPFoundation.git
     from: 0.9.19
@@ -18,7 +15,6 @@ targets:
       - path: Memoret.icns
         buildPhase: resources
     dependencies:
-      - package: Sodium
       - package: ZIPFoundation
     info:
       path: Info.plist
@@ -33,8 +29,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mysticcoders.memoret.mac
         DEVELOPMENT_TEAM: REMBT6JY4N
-        MARKETING_VERSION: "0.1.2"
-        CURRENT_PROJECT_VERSION: "3"
+        MARKETING_VERSION: "0.2.0"
+        CURRENT_PROJECT_VERSION: "4"
         SWIFT_VERSION: "5.9"
         GENERATE_INFOPLIST_FILE: false
         ENABLE_HARDENED_RUNTIME: true
@@ -50,7 +46,6 @@ targets:
       - target: Memoret
       # Named again rather than relied on transitively: the tests build the
       # packages and sealed blobs they feed to ingest.
-      - package: Sodium
       - package: ZIPFoundation
     settings:
       base:
